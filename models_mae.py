@@ -14,6 +14,9 @@ from functools import partial
 import torch
 import torch.nn as nn
 
+import inspect
+_HAS_QK_SCALE = "qk_scale" in inspect.signature(Block.__init__).parameters
+
 from timm.models.vision_transformer import PatchEmbed, Block
 
 from util.pos_embed import get_2d_sincos_pos_embed
@@ -36,10 +39,22 @@ class MaskedAutoencoderViT(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
-        self.blocks = nn.ModuleList([
-            # Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+        if _HAS_QK_SCALE:
+            self.blocks = nn.ModuleList([
+            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+            for i in range(depth)
+        ])
+        else:
+            self.blocks = nn.ModuleList([
             Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
-            for i in range(depth)])
+            for i in range(depth)
+        ])
+
+        #self.blocks = nn.ModuleList([
+            # Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+            #Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+            #for i in range(depth)])
+                     
         self.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
 
