@@ -319,15 +319,25 @@ def load_model(args, model_without_ddp, optimizer, loss_scaler):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
         else:
-            checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
+            # PyTorch 2.6+ defaults weights_only=True; our ckpt contains argparse.Namespace in 'args'
+            # so we must load with weights_only=False (trusted checkpoint).
+            checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
+            # checkpoint = torch.load(args.resume, map_location='cpu')
+        
+        msg = model_without_ddp.load_state_dict(checkpoint['model'], strict=False)
+        #model_without_ddp.load_state_dict(checkpoint['model'])
         print("Resume checkpoint %s" % args.resume)
+        print("Model load_state_dict:", msg)
+        
         if 'optimizer' in checkpoint and 'epoch' in checkpoint and not (hasattr(args, 'eval') and args.eval):
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            if optimizer is not None:
+                optimizer.load_state_dict(checkpoint['optimizer'])
             args.start_epoch = checkpoint['epoch'] + 1
-            if 'scaler' in checkpoint:
+            if 'scaler' in checkpoint and loss_scaler is not None:
                 loss_scaler.load_state_dict(checkpoint['scaler'])
-            print("With optim & sched!")
+            # print("With optim & sched!")
+            print(f"Resume OK: epoch={checkpoint['epoch']} -> start_epoch={args.start_epoch}")
+
 
 
 def all_reduce_mean(x):
